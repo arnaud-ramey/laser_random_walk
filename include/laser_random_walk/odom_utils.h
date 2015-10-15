@@ -7,18 +7,6 @@
 
 namespace odom_utils {
 
-//! a super simple 3 dimension vector
-struct FooVec3 {
-  float x, y, z;
-};
-
-//! an order "u" for moving the robot (linear, angular)
-struct FooRobotCommandOrder {
-  FooVec3 linear, angular;
-};
-
-////////////////////////////////////////////////////////////////////////////////
-
 /*!
  \param x
           the position to update, in meters
@@ -78,29 +66,6 @@ inline void update_pos_rot(float & x, float & y, float & yaw,
 } // end update_pos_rot();
 
 ////////////////////////////////////////////////////////////////////////////////
-
-/*!
- Version for ROS command orders (twists)
- \param x
-          the position to update, in meters
- \param y
-          the position to update, in meters
- \param yaw
-          the angle to update, in radians
- \param order
-          speeds in m/s and rad/s in the frame of the world
- \param dt_sec
-          time elapsed with these speeds in seconds
-*/
-template<class RobotCommandOrder, class Time>
-inline void update_pos_rot(float & x, float & y, float & yaw,
-                           const RobotCommandOrder & order,
-                           const Time & dt_sec) {
-  update_pos_rot(x, y, yaw, order.linear.x, order.linear.y, order.angular.z, dt_sec);
-} // end update_pos_rot();
-
-////////////////////////////////////////////////////////////////////////////////
-
 
 /*!
  \param vel_lin

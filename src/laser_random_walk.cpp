@@ -29,38 +29,47 @@
 
 \section Parameters
   - \b min_vel_lin
-    [double] m.s-1 (default: .1)
+    [double, m.s-1] (default: .1)
     The minimum linear speed.
 
   - \b max_vel_lin
-    [double] m.s-1 (default: .3)
+    [double, rad.s-1] (default: .3)
     The maximum linear speed.
 
   - \b max_vel_ang
-    [double] rad.s-1 (default: .5)
+    [double, rad.s-1] (default: .5)
     The maximum absolute angular speed. The minimum angular speed is 0.
     The search domain is then: [-max_vel_ang .. max_vel_ang]
+
+  - \b robot_radius
+    [double, meters] (default: .5)
+    The robot radius, in meters.
 */
-#include <ros/ros.h>
-#include <geometry_msgs/Point.h>
 #include <laser_random_walk/wanderer.h>
+// ROS
+#include <ros/ros.h>
+#include <tf/transform_datatypes.h>
+// ROS msg
+#include <geometry_msgs/Point.h>
+#include <geometry_msgs/Twist.h>
 #include <sensor_msgs/LaserScan.h>
+#include <nav_msgs/Path.h>
 
 typedef geometry_msgs::Point Pt2;
 
 ////////////////////////////////////////////////////////////////////////////////
 
 //! convert from polar to xy coordinates for a laser data
-template<class Pt2>
+template<class _Pt2>
 static inline void convert_sensor_data_to_xy(const sensor_msgs::LaserScan & laser_msg,
-                                             std::vector<Pt2> & out_vector) {
+                                             std::vector<_Pt2> & out_vector) {
   out_vector.clear();
   out_vector.reserve(laser_msg.ranges.size());
   const float* curr_range = &(laser_msg.ranges[0]);
   float curr_angle = laser_msg.angle_min;
   for (unsigned int idx = 0; idx < laser_msg.ranges.size(); ++idx) {
     //maggieDebug2("idx:%i, curr_range:%g", idx, *curr_range);
-    Pt2 pt;
+    _Pt2 pt;
     pt.x = *curr_range * cos(curr_angle);
     pt.y = *curr_range * sin(curr_angle);
     out_vector.push_back(pt);
@@ -74,29 +83,52 @@ static inline void convert_sensor_data_to_xy(const sensor_msgs::LaserScan & lase
 class ROSWanderer : public Wanderer<Pt2> {
 public:
   ROSWanderer() : _nh_private("~") {
-    laser_sub = _nh_public.subscribe<sensor_msgs::LaserScan>
+    _laser_sub = _nh_public.subscribe<sensor_msgs::LaserScan>
         ("scan", 1,  &ROSWanderer::scan_cb, this);
-    double _min_vel_lin,_max_vel_lin, _max_vel_ang;
-    _nh_private.param("min_vel_lin", _min_vel_lin, .1);
-    _nh_private.param("max_vel_lin", _max_vel_lin, .3);
-    _nh_private.param("max_vel_ang", _max_vel_ang, .5);
-    set_limit_speeds(_min_vel_lin,_max_vel_lin, _max_vel_ang);
+    _vel_pub = _nh_public.advertise<geometry_msgs::Twist>("cmd_vel", 1);
+    _traj_pub = _nh_public.advertise<nav_msgs::Path>("traj", 1);
+    double min_vel_lin,max_vel_lin, max_vel_ang;
+    _nh_private.param("min_vel_lin", min_vel_lin, .1);
+    _nh_private.param("max_vel_lin", max_vel_lin, .3);
+    _nh_private.param("max_vel_ang", max_vel_ang, .5);
+    _nh_private.param("robot_radius", _robot_radius, .5);
+    set_limit_speeds(min_vel_lin, max_vel_lin, max_vel_ang);
   }
 
   void scan_cb(const sensor_msgs::LaserScanConstPtr & scan) {
     convert_sensor_data_to_xy(*scan, _scan2vec);
-    set_costmap(_scan2vec, .1, .1);
-  }
+    set_costmap(_scan2vec, _robot_radius);
+    geometry_msgs::Twist twist;
+    if (!recompute_speeds(twist.linear.x, twist.angular.z)) {
+      printf("recompute_speeds() failed!\n");
+      return;
+    }
+    _vel_pub.publish(twist);
+    if (!_traj_pub.getNumSubscribers()) // do nothing if no subscriber
+      return;
+    std::vector<Pt2> traj_xy = get_best_trajectory();
+    unsigned int npts = traj_xy.size();
+    _path_msg.header = scan->header;
+    _path_msg.poses.resize(npts);
+    for (int i = 0; i < npts; ++i) {
+      _path_msg.poses[i].pose.position = traj_xy[i];
+      _path_msg.poses[i].pose.orientation = tf::createQuaternionMsgFromYaw(0);;
+    }
+    _traj_pub.publish(_path_msg);
+  } // end scan_cb();
 
-  ros::Subscriber laser_sub;
+  ros::Subscriber _laser_sub;
+  ros::Publisher _vel_pub, _traj_pub;
+  nav_msgs::Path _path_msg;
   ros::NodeHandle _nh_public, _nh_private;
   std::vector<Pt2> _scan2vec;
+  double _robot_radius;
 }; // end class ROSWanderer
 
 ////////////////////////////////////////////////////////////////////////////////
 
 int main (int argc, char** argv) {
-  ROSWanderer wanderer;
   ros::init(argc, argv, "laser_random_walk"); //Initialise and create a ROS node
+  ROSWanderer wanderer;
   ros::spin();
 }

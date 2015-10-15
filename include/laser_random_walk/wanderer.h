@@ -5,6 +5,8 @@
 #include <math.h>
 #include "odom_utils.h"
 #include "timer.h"
+#define DEBUG_PRINT(...)   {}
+//#define DEBUG_PRINT(...)   printf(__VA_ARGS__)
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -38,23 +40,26 @@ distance_points_squared(const Point2_A & A, const Point2_B & B) {
     a vector of 2D points
  \param min_dist
     a threshold distance
- \return bool
-    true if there is a a pair of points closer than min_dist
+ \return min_dist
+    -1 if vectors closer than min_dist, min distance otherwise
 */
 template<class _Pt2>
-inline bool two_vectors_closer_than_threshold(const std::vector<_Pt2> & A,
-                                              const std::vector<_Pt2> & B,
-                                              const float min_dist) {
-  float min_dist_sq = min_dist * min_dist;
+inline double vectors_dist_thres(const std::vector<_Pt2> & A,
+                                 const std::vector<_Pt2> & B,
+                                 const float dist_thres) {
+  float dist_thres_sq = dist_thres * dist_thres;
+  double min_dist_sq = 1E10;
   for (unsigned int A_idx = 0; A_idx < A.size(); ++A_idx) {
     for (unsigned int B_idx = 0; B_idx < B.size(); ++B_idx) {
-      if (geometry_utils::distance_points_squared(A[A_idx], B[B_idx])
-          < min_dist_sq)
-        return true;
+      double dist = geometry_utils::distance_points_squared(A[A_idx], B[B_idx]);
+      if (dist < dist_thres_sq)
+        return -1;
+      if (dist < min_dist_sq)
+        min_dist_sq = dist;
     } // end loop B_idx
   } // end loop A_idx
-  return false;
-} // end two_vectors_closer_than_threshold()
+  return sqrt(min_dist_sq);
+} // end vectors_dist_thres()
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -67,24 +72,10 @@ inline bool two_vectors_closer_than_threshold(const std::vector<_Pt2> & A,
 * made of a linear and an angular speed.
 */
 struct SpeedOrder {
-  double vel_lin;
-  double vel_ang;
-  SpeedOrder() : vel_lin(0), vel_ang(0) {}
+  double v, w;
+  SpeedOrder() : v(0), w(0) {}
   SpeedOrder(const double & lin, const double & ang)
-    : vel_lin(lin), vel_ang(ang) {}
-  
-  //////////////////////////////////////////////////////////////////////////////
-  
-  /*! clamp vel_ang to interval
-[-max_vel_ang, max_vel_ang]
-and vel_lin to interval
-[-max_lin_speed, -min_lin_speed] U [min_lin_speed, max_lin_speed] */
-  void clamp_speed(const double & min_vel_lin_,
-                   const double & max_vel_lin_,
-                   const double & max_vel_ang_) {
-    vel_ang = clamp(vel_ang, -max_vel_ang_, max_vel_ang_);
-    vel_lin = clamp(vel_lin, min_vel_lin_, max_vel_lin_);
-  } // end clamp();
+    : v(lin), w(ang) {}
 }; // end SpeedOrder
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -102,7 +93,7 @@ public:
 
   Wanderer() {
     _was_stopped = true;
-    _min_vel_lin = _max_vel_lin = _max_vel_ang = -1;
+    _min_v = _max_v = _max_w = -1;
     // default  params
     _current_robot_pose.position.x = _current_robot_pose.position.y = 0;
     _current_robot_pose.yaw = 0;
@@ -112,30 +103,22 @@ public:
   //////////////////////////////////////////////////////////////////////////////
   
   inline void set_costmap(const std::vector<Pt2> & costmap_cell_centers,
-                          const double costmap_cell_width,
-                          const double costmap_cell_height) {
+                          const double min_obstacle_distance) {
     _costmap_cell_centers = costmap_cell_centers;
-    _costmap_cell_width = costmap_cell_width;
-    _costmap_cell_height = costmap_cell_height;
+    _min_obstacle_distance = clamp(fabs(min_obstacle_distance), .01, 10.);
   }
   
   //////////////////////////////////////////////////////////////////////////////
   
-  inline void set_limit_speeds(double min_vel_lin, double max_vel_lin, double max_vel_ang,
-                               double min_rotate_on_place_speed = -1, 
-                               double max_rotate_on_place_speed = -1) {
-    _min_vel_lin = min_vel_lin;
-    _max_vel_lin = max_vel_lin;
-    _max_vel_ang = max_vel_ang;
-    _min_rotate_on_place_speed = (min_rotate_on_place_speed != -1 ?
-                                  min_rotate_on_place_speed : fabs(max_vel_ang) * 2 / 3);
-    _max_rotate_on_place_speed = (max_rotate_on_place_speed != -1 ?
-                                  max_rotate_on_place_speed : fabs(max_vel_ang));
+  inline void set_limit_speeds(double min_v, double max_v, double max_w) {
+    _min_v = min_v;
+    _max_v = max_v;
+    _max_w = max_w;
   }
   
   //////////////////////////////////////////////////////////////////////////////
   
-  inline virtual void set_simulation_parameters(const double time_pred = 5, 
+  inline virtual void set_simulation_parameters(const double time_pred = 5,
                                                 const double time_step = .2,
                                                 double speed_recomputation_timeout = 1) {
     _time_pred = time_pred;
@@ -147,13 +130,13 @@ public:
   
   inline std::vector<Pt2> get_best_trajectory() const {
     std::vector<Pt2> out_traj;
-    odom_utils::make_trajectory(// get_best_element().element.vel_lin, 
-        _current_order.vel_lin,
-        // get_best_element().element.vel_ang, 
-        _current_order.vel_ang,
-        out_traj, 
-        _time_pred, _time_step,
-        0, 0, 0);
+    odom_utils::make_trajectory(// get_best_element().element.v,
+                                _curr_order.v,
+                                // get_best_element().element.w,
+                                _curr_order.w,
+                                out_traj,
+                                _time_pred, _time_step,
+                                0, 0, 0);
     //start_pos.x, start_pos.y, start_yaw);
     return out_traj;
   }
@@ -165,65 +148,74 @@ public:
     bool want_recompute_speed = false;
     // recompute speeds if the last ones are too old
     if (!want_recompute_speed && _last_speed_recomputation_timer.getTimeSeconds() > _speed_recomputation_timeout) {
-      printf("speed_timeout");
+      printf("speed_timeout\n");
       want_recompute_speed = true;
     }
     // check if there will be a collision soon with the elected speeds
     if (!want_recompute_speed &&
-        check_trajectory_valid(_current_order.vel_lin, _current_order.vel_ang, _costmap_cell_centers) == false) {
-      printf("coming_collision !");
+        trajectory_grade(_curr_order.v, _curr_order.w, _costmap_cell_centers) == false) {
+      printf("coming_collision !\n");
       want_recompute_speed = true;
     } // end
-  
+
     if (want_recompute_speed) {
       bool new_speeds_found = false;
       _last_speed_recomputation_timer.reset();
+#if 0
       int nb_tries = 0;
       // choose a random speed and check it enables at least 1 second of movement
       while (!new_speeds_found) {
         // authorize on place rotations only after having tried many times
-        float curr_min_vel_lin = (nb_tries < 100 ? _min_vel_lin : 0);
-        if (1.f * nb_tries / MAX_TRIES > .9 )
-          curr_min_vel_lin = -.1; // authorize backward moves in extreme cases
-        _current_order.vel_lin = curr_min_vel_lin + drand48() * (_max_vel_lin - curr_min_vel_lin);
-        _current_order.vel_ang = drand48() * 2 * _max_vel_ang - _max_vel_ang;
-        new_speeds_found = check_trajectory_valid(_current_order.vel_lin, _current_order.vel_ang, _costmap_cell_centers);
+        float curr_min_v = (nb_tries < .4 * MAX_TRIES ? _min_v : _min_v / 2);
+        if (1.f * nb_tries > .5 * MAX_TRIES )
+          curr_min_v = -.1; // authorize backward moves in extreme cases
+        _curr_order.v = curr_min_v + drand48() * (_max_v - curr_min_v);
+        _curr_order.w = drand48() * 2 * _max_w - _max_w;
+        double currr_grade = trajectory_grade(_curr_order.v, _curr_order.w, _costmap_cell_centers);
+        new_speeds_found = (curr_grade > 0);
         if (nb_tries++ > MAX_TRIES)
           break;
       } // end while (!new_speeds_found)
-  
+#else
+      double best_grade = best_grade_in_range(_min_v, _max_v, _max_w);
+      if (best_grade < 0) // extreme case -> go backward
+        best_grade = best_grade_in_range(-(_min_v+_max_v)*.5, -_min_v, _max_w);
+      new_speeds_found = (best_grade > 0);
+#endif
+
       if (!new_speeds_found) {
-        printf("The robot is stuck! Stopping motion and exiting.");
+        printf("The robot is stuck! Stopping motion and exiting.\n");
         stop_robot();
         return false;
       } // end not new_speeds_found
-  
-      printf("Found a suitable couple of speeds in %g ms and %i tries: "
-               "_vel_lin:%g, _vel_ang:%g",
-               _last_speed_recomputation_timer.getTimeMilliseconds(), nb_tries, 
-               _current_order.vel_lin, 
-               _current_order.vel_ang);
+
+      DEBUG_PRINT("Found a suitable couple of speeds in %g ms and %i tries: "
+                  "_v:%g, _w:%g\n",
+                  _last_speed_recomputation_timer.getTimeMilliseconds(), nb_tries,
+                  _curr_order.v,
+                  _curr_order.w);
       _last_speed_recomputation_timer.reset();
     } // end if (want_recompute_speed)
 
     // publish the computed speed
-    printf("DynamicWindow: Publishing _vel_lin:%g, _vel_ang:%g",
-           _current_order.vel_lin, _current_order.vel_ang);
-    best_speed_lin = _current_order.vel_lin;
-    best_speed_ang = _current_order.vel_ang;
+    DEBUG_PRINT("DynamicWindow: Publishing _v:%g, _w:%g\n",
+                _curr_order.v, _curr_order.w);
+    best_speed_lin = _curr_order.v;
+    best_speed_ang = _curr_order.w;
     return true;
   } // end recompute_speeds()
   
   
 protected:  
 
+
   ////////////////////////////////////////////////////////////////////////////////
   
   inline void set_speed(const SpeedOrder & new_speed) {
-    printf("set_speed(lin:%g, ang:%g)",
-           new_speed.vel_lin, new_speed.vel_ang);
-    _was_stopped = (new_speed.vel_lin == 0) && (new_speed.vel_ang == 0);
-    _current_order = new_speed;
+    DEBUG_PRINT("set_speed(lin:%g, ang:%g)",
+                new_speed.v, new_speed.w);
+    _was_stopped = (new_speed.v == 0) && (new_speed.w == 0);
+    _curr_order = new_speed;
   }
   
   //////////////////////////////////////////////////////////////////////////////
@@ -235,18 +227,39 @@ protected:
   
   ////////////////////////////////////////////////////////////////////////////////
   
-  //! return true if the trajectory wont collide with the laser in the time TIME_PRED
-  bool check_trajectory_valid(const float & vel_lin, const float & vel_ang,
-                              const std::vector<Pt2> & laser_xy) {
+  //! return < 0 if the trajectory will collide with the laser in the time TIME_PRED,
+  //! distance to closest obstacle otherwise + bonus for speed
+  double trajectory_grade(const float & v, const float & w,
+                          const std::vector<Pt2> & laser_xy) {
     // determine the coming trajectory
     std::vector<Pt2> traj_xy;
-    odom_utils::make_trajectory(vel_lin, vel_ang, traj_xy, _time_pred, _time_step, 0, 0, 0);
+    odom_utils::make_trajectory(v, w, traj_xy, _time_pred, _time_step, 0, 0, 0);
     // find if there might be a collision
-    if (geometry_utils::two_vectors_closer_than_threshold(traj_xy, laser_xy, min_obstacle_distance))
-      return false;
-    else
-      return true;
+    double dist = geometry_utils::vectors_dist_thres(traj_xy, laser_xy, _min_obstacle_distance);
+    if (dist < 0)
+      return -1;
+    //return dist + fabs(v); // bonus for speed
+    return .1 * std::max(fabs(v)/_max_v, fabs(w)/_max_w) + drand48();
   }
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  inline double best_grade_in_range(double min_v, double max_v, double max_w) {
+    double best_grade = -1, dv = (max_v - min_v) / SPEED_STEPS, dw = 2 * max_w / SPEED_STEPS;
+    for (double v = min_v; v <= max_v; v += dv) {
+      for (double w = -max_w; w <= max_w; w += dw) {
+        double currr_grade = trajectory_grade(v, w, _costmap_cell_centers);
+        if (currr_grade < 0)
+          continue;
+        if (currr_grade < best_grade)
+          continue;
+        _curr_order.v = v;
+        _curr_order.w = w;
+        best_grade = currr_grade;
+      } // end loop w
+    } // end loop v
+    return best_grade;
+  } // end best_grade_in_range()
 
   //////////////////////////////////////////////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////////
@@ -257,17 +270,16 @@ protected:
   //! timer since last computed speed
   Timer _last_speed_recomputation_timer;
   //! the current velocities, m/s or rad/s
-  SpeedOrder _current_order;
-  bool _was_stopped;  
+  SpeedOrder _curr_order;
+  bool _was_stopped;
   
   // obstacles
   std::vector<Pt2> _costmap_cell_centers;
-  double _costmap_cell_width, _costmap_cell_height;
+  double _min_obstacle_distance;
   
   // robot parameters
   Pose2 _current_robot_pose;
-  double _min_vel_lin, _max_vel_lin, _max_vel_ang;
-  double _min_rotate_on_place_speed, _max_rotate_on_place_speed;
+  double _min_v, _max_v, _max_w;
   
   // simul parameters
   double _speed_recomputation_timeout;
@@ -277,9 +289,7 @@ protected:
   double _time_step;
   
   // wanderer params
-  static const int MAX_TRIES = 100000;
-  //! the distance we want to keep away from obstacles, meters
-  static const double min_obstacle_distance = .4;
+  static const unsigned int MAX_TRIES = 1E6, SPEED_STEPS = 50;
 }; // end class Wanderer
 
 #endif // _WANDERER_H_
