@@ -110,7 +110,7 @@ public:
     unsigned int npts = traj_xy.size();
     _path_msg.header = scan->header;
     _path_msg.poses.resize(npts);
-    for (int i = 0; i < npts; ++i) {
+    for (unsigned int i = 0; i < npts; ++i) {
       _path_msg.poses[i].pose.position = traj_xy[i];
       _path_msg.poses[i].pose.orientation = tf::createQuaternionMsgFromYaw(0);;
     }
