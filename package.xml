@@ -10,6 +10,7 @@
   <license>LGPLv3</license>
   <!-- dependencies -->
   <buildtool_depend>catkin</buildtool_depend>
+  <depend>gmapping</depend>
   <depend>roscpp</depend>
   <depend>nav_msgs</depend>
   <depend>tf</depend>

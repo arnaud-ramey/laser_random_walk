@@ -1,8 +1,8 @@
 /*!
-  \file         laser_random_walk.cpp
+  \file         wall_follower.cpp
   \author       Arnaud Ramey <arnaud.a.ramey@gmail.com>
                 -- Robotics Lab, University Carlos III of Madrid
-  \date         2015/10/14
+  \date         2016/11
 
   ______________________________________________________________________________
 
@@ -45,7 +45,6 @@
     [double, meters] (default: .5)
     The robot radius, in meters.
 */
-#include <laser_random_walk/wanderer.h>
 // ROS
 #include <ros/ros.h>
 #include <tf/transform_datatypes.h>
@@ -54,6 +53,9 @@
 #include <geometry_msgs/Twist.h>
 #include <sensor_msgs/LaserScan.h>
 #include <nav_msgs/Path.h>
+// laser_random_walk
+#include <laser_random_walk/wanderer.h>
+
 
 typedef geometry_msgs::Point Pt2;
 
@@ -80,37 +82,114 @@ static inline void convert_sensor_data_to_xy(const sensor_msgs::LaserScan & lase
 
 ////////////////////////////////////////////////////////////////////////////////
 
-class ROSWanderer : public Wanderer<Pt2> {
+class ROSWallFollower : public Wanderer<Pt2> {
 public:
-  ROSWanderer() : _nh_private("~") {
+  ROSWallFollower() : _nh_private("~") {
     _laser_sub = _nh_public.subscribe<sensor_msgs::LaserScan>
-        ("scan", 1,  &ROSWanderer::scan_cb, this);
+        ("scan", 1,  &ROSWallFollower::scan_cb, this);
     _vel_pub = _nh_public.advertise<geometry_msgs::Twist>("cmd_vel", 1);
     _traj_pub = _nh_public.advertise<nav_msgs::Path>("traj", 1);
     _nh_private.param("min_vel_lin", _min_v, .1);
     _nh_private.param("max_vel_lin", _max_v, .3);
     _nh_private.param("max_vel_ang", _max_w, .5);
     _nh_private.param("robot_radius", _robot_radius, .5);
+    _nh_private.param("wall_distance", _wall_distance, .7);
+    set_simulation_parameters(3, .2, .5);
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////
+
+  //! return < 0 if the trajectory will collide with the laser in the time TIME_PRED,
+  //! distance to closest obstacle otherwise + bonus for speed
+  virtual double trajectory_grade(const float & v, const float & w,
+                          const std::vector<Pt2> & laser_xy) {
+    //ROS_WARN("ROSWallFollower::trajectory_grade()");
+    // determine the coming trajectory
+    std::vector<Pt2> traj_xy;
+    odom_utils::make_trajectory(v, w, traj_xy, _time_pred, _time_step, 0, 0, 0);
+    // compute average distance between laser and traj, should be = wall distance
+    double min_obstacle_distance_sq = _min_obstacle_distance * _min_obstacle_distance;
+    unsigned int ntraj = traj_xy.size(), nlaser = laser_xy.size();
+      double score = 0;
+    for (unsigned int i = 0; i < ntraj; ++i) {
+      double min_dist_sq = 1E10;
+      for (unsigned int j = 0; j < nlaser; ++j) {
+        double distsq = geometry_utils::distance_points_squared(traj_xy[i], laser_xy[j]);
+        if (distsq < min_obstacle_distance_sq) // there might be a collision
+          return -1;
+        if (laser_xy[j].y > 0 || laser_xy[j].x > 1) //point on the right => discard
+          continue;
+        if (min_dist_sq > distsq)
+          min_dist_sq = distsq;
+      } // end loop j
+      //score += fabs(sqrt(min_dist_sq) - _wall_distance);
+      if (fabs(sqrt(min_dist_sq) - _wall_distance) < .1)
+        ++score;
+    } // end loop i
+    score /= ntraj; // normalize
+    // >0: to the left
+    score += - .1 * w / _max_w; // better turning right
+    //score += v;
+    //score = w; // better turning right
+    return score;
   }
 
   ////////////////////////////////////////////////////////////////////////////////
 
   void scan_cb(const sensor_msgs::LaserScanConstPtr & scan) {
     convert_sensor_data_to_xy(*scan, _scan2vec);
-    set_costmap(_scan2vec, _robot_radius);
     geometry_msgs::Twist twist;
+#if 0
+    set_costmap(_scan2vec, _robot_radius);
     if (!recompute_speeds(twist.linear.x, twist.angular.z)) {
       printf("recompute_speeds() failed!\n");
       return;
     }
+#else
+    // find wall
+    unsigned int npts = scan->ranges.size(), npts_wall = 0, npts_prev = -1;
+    std::vector<bool> in_wall(npts, false), are_close(npts*npts);
+    // find seed points
+    Pt2 seed;
+    seed.x = 0;
+    seed.y = -_wall_distance; // right side of the robot: y < 0
+    // fill in_wall
+    for (unsigned int i = 0; i < npts; ++i) {
+      in_wall[i] = (geometry_utils::distance_points_squared(_scan2vec[i], seed)
+                     < _wall_distance*_wall_distance);
+      // fill are_close
+      for (unsigned int j = i; j < npts; ++j) {
+        are_close[i * npts  + j]
+            = are_close[j * npts  + i]
+            = (geometry_utils::distance_points_squared(_scan2vec[i], _scan2vec[j])
+               < _wall_distance*_wall_distance);
+      } // end for j
+    } // end for i
+    // determine cluster
+    while (npts_prev != npts_wall) {
+      npts_prev = npts_wall;
+      for (unsigned int i = 0; i < npts; ++i) {
+        if (in_wall[i])
+          continue;
+        for (unsigned int j = 0; j < npts; ++j) {
+          if (!in_wall[j] || !are_close[i * npts + j])
+            continue;
+          in_wall[i] = true;
+          ++npts_wall;
+          break;
+        } // end for j
+      } // end for i
+    } // end while()
+    ROS_INFO("Wall size:%i", npts_wall);
+#endif
     _vel_pub.publish(twist);
     if (!_traj_pub.getNumSubscribers()) // do nothing if no subscriber
       return;
     std::vector<Pt2> traj_xy = get_best_trajectory();
-    unsigned int npts = traj_xy.size();
+    unsigned int npts_traj = traj_xy.size();
     _path_msg.header = scan->header;
-    _path_msg.poses.resize(npts);
-    for (unsigned int i = 0; i < npts; ++i) {
+    _path_msg.poses.resize(npts_traj);
+    for (unsigned int i = 0; i < npts_traj; ++i) {
       _path_msg.poses[i].pose.position = traj_xy[i];
       _path_msg.poses[i].pose.orientation = tf::createQuaternionMsgFromYaw(0);;
     }
@@ -118,39 +197,21 @@ public:
   } // end scan_cb();
 
   ////////////////////////////////////////////////////////////////////////////////
-
-  //! return < 0 if the trajectory will collide with the laser in the time TIME_PRED,
-  //! distance to closest obstacle otherwise + bonus for speed
-  virtual double trajectory_grade(const float & v, const float & w,
-                                  const std::vector<Pt2> & laser_xy) {
-    //printf("Wanderer::trajectory_grade()\n");
-
-    // determine the coming trajectory
-    std::vector<Pt2> traj_xy;
-    odom_utils::make_trajectory(v, w, traj_xy, _time_pred, _time_step, 0, 0, 0);
-    // find if there might be a collision
-    double dist = geometry_utils::vectors_dist_thres(traj_xy, laser_xy, _min_obstacle_distance);
-    if (dist < 0)
-      return -1;
-    //return dist + fabs(v); // bonus for speed
-    return .1 * std::max(fabs(v)/_max_v, fabs(w)/_max_w) + drand48();
-  }
-
-  ////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////
 
+  ros::NodeHandle _nh_public, _nh_private;
+  double _robot_radius, _wall_distance;
+  std::vector<Pt2> _scan2vec;
   ros::Subscriber _laser_sub;
   ros::Publisher _vel_pub, _traj_pub;
   nav_msgs::Path _path_msg;
-  ros::NodeHandle _nh_public, _nh_private;
-  std::vector<Pt2> _scan2vec;
-  double _robot_radius;
-}; // end class ROSWanderer
+}; // end class ROSWallFollower
 
 ////////////////////////////////////////////////////////////////////////////////
 
 int main (int argc, char** argv) {
-  ros::init(argc, argv, "laser_random_walk"); //Initialise and create a ROS node
-  ROSWanderer wanderer;
+  ros::init(argc, argv, "wall_follower"); //Initialise and create a ROS node
+  ROSWallFollower wanderer;
   ros::spin();
 }
+

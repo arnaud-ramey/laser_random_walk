@@ -16,8 +16,16 @@ catkin_package(
 )
 ### 7 - Libraries/Executables to build (add_library()/add_executable()/target_link_libraries())
 include_directories( include ${catkin_INCLUDE_DIRS})
+
 add_executable(laser_random_walk.exe src/laser_random_walk.cpp)
 target_link_libraries(laser_random_walk.exe ${catkin_LIBRARIES})
+
+add_executable(odom2tf.exe src/odom2tf.cpp)
+target_link_libraries(odom2tf.exe ${catkin_LIBRARIES})
+
+add_executable(wall_follower.exe src/wall_follower.cpp)
+target_link_libraries(wall_follower.exe ${catkin_LIBRARIES})
+
 ### 8 - Tests to build (catkin_add_gtest())
 #ADD_SUBDIRECTORY(test)
 ### 9 - Install rules (install())

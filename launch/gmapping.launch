@@ -1,0 +1,31 @@
+<launch>
+<arg name="rviz" default="false"/>
+
+<node pkg="morseslam" type="morse_run.bash" name="morse_run" output="screen" required="true"
+      args="$(find morseslam)/config/lab.py" />
+
+<node pkg="tf" type="static_transform_publisher" name="laser2base_broadcaster" output="screen"
+      args="0 0 0  0 0 0  /base_footprint /base_laser_link 100" />
+
+<remap from="/odom" to="/robot/odometry" />
+<node pkg="morseslam" type="odom2tf.exe" name="odom2tf" output="screen"/>
+
+<node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz"
+      args="--display-config $(find morseslam)/config/rviz_config.rviz"/>
+
+<!--
+<node pkg="people_detection_vision" type="robot_wanderer_with_moving_goal.exe"
+      name="robot_wanderer_with_moving_goal" output="screen"/>
+-->
+<remap from="/cmd_vel" to="/robot/motion" />
+<remap from="/scan" to="/robot/scan" />
+<node pkg="laser_random_walk" type="laser_random_walk.exe" output="screen"
+      name="laser_random_walk" args="_min_vel_lin:=.2  _max_vel_lin:=.5  _robot_radius:=.6" />
+
+<!--
+http://www.openrobots.org/morse/doc/1.2/user/advanced_tutorials/ros_nav_tutorial.html
+http://wiki.ros.org/gmapping#Required_tf_Transforms
+$ sudo apt-get install ros-indigo-slam-gmapping  -->
+<node pkg="gmapping" type="slam_gmapping" name="gmapping" output="screen"
+      args="scan:=/robot/scan  _base_frame:=/base_footprint" />
+</launch>

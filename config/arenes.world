@@ -1,0 +1,64 @@
+include "stage_includes.inc"
+
+# set the resolution of the underlying raytrace model in meters
+resolution 0.02
+
+#~ interval_sim 100  # simulation timestep in milliseconds
+interval_sim 250  # simulation timestep in milliseconds
+
+# configure the GUI window
+window
+(
+  size [ 1364 358 ] # in pixels
+  scale 31.818   # pixels per meter
+  center [ 9.170 5.323 ]
+  rotate [ 27.500  0.000 ]
+
+  show_data 0              # 1=on 0=off
+)
+
+# load an environment bitmap
+floorplan
+(
+  name "arenes"
+  size [17.000 8.000 0.800]
+  pose [8.500  4.000 0.000 0.000]
+  bitmap "bitmaps/arenes.png"
+)
+
+# throw in a robot
+pioneer2dx_no_sonar
+(
+  # can refer to the robot by this name
+  name "r0"
+  pose [ 10.5 7 0 -90.000 ]
+  fancysick(pose [ 0.250 0.000 -0.200 0.000 ])
+  camera
+  (
+    # laser properties
+    resolution [ 160 120 ]
+    range [ 0.2 81.0 ] # 8 meters
+    fov [ 70.0 40.0 ]
+    pantilt [ 0.0 0.0 ]
+
+    # model properties
+    size [ 0.100 0.070 0.050 ]
+    color "black"
+    watts 100.0 # TODO find watts for sony pan-tilt camera
+  )
+)
+
+# throw in 2 other robots
+pioneer2dx_no_sonar
+(
+  color "green"
+  pose [ 11.5 7 0 -90.000 ]
+  fancysick(pose [ 0.250 0.000 -0.200 0.000 ])
+)
+pioneer2dx_no_sonar
+(
+  color "blue"
+  pose [ 12.5 7 0 -90.000 ]
+  fancysick(pose [ 0.250 0.000 -0.200 0.000 ])
+)
+
