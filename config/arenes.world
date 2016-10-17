@@ -9,7 +9,7 @@ interval_sim 250  # simulation timestep in milliseconds
 # configure the GUI window
 window
 (
-  size [ 1364 358 ] # in pixels
+  size [ 1364 370 ] # in pixels
   scale 31.818   # pixels per meter
   center [ 9.170 5.323 ]
   rotate [ 27.500  0.000 ]
@@ -31,7 +31,7 @@ pioneer2dx_no_sonar
 (
   # can refer to the robot by this name
   name "r0"
-  pose [ 10.5 7 0 -90.000 ]
+  pose [ 10.500 6.610 0.000 -90.000 ]
   fancysick(pose [ 0.250 0.000 -0.200 0.000 ])
   camera
   (
@@ -52,13 +52,13 @@ pioneer2dx_no_sonar
 pioneer2dx_no_sonar
 (
   color "green"
-  pose [ 11.5 7 0 -90.000 ]
+  pose [ 11.500 7.000 0.000 -90.000 ]
   fancysick(pose [ 0.250 0.000 -0.200 0.000 ])
 )
 pioneer2dx_no_sonar
 (
   color "blue"
-  pose [ 12.5 7 0 -90.000 ]
+  pose [ 12.500 7.000 0.000 -90.000 ]
   fancysick(pose [ 0.250 0.000 -0.200 0.000 ])
 )
 

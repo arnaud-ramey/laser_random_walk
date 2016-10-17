@@ -17,7 +17,11 @@ catkin_package(
 ### 7 - Libraries/Executables to build (add_library()/add_executable()/target_link_libraries())
 include_directories( include ${catkin_INCLUDE_DIRS})
 
-add_executable(laser_random_walk.exe src/laser_random_walk.cpp)
+add_executable(laser_random_walk.exe src/laser_random_walk.cpp
+  include/laser_random_walk/odom_utils.h
+  include/laser_random_walk/timer.h
+  include/laser_random_walk/wanderer.h
+)
 target_link_libraries(laser_random_walk.exe ${catkin_LIBRARIES})
 
 add_executable(odom2tf.exe src/odom2tf.cpp)

@@ -1,11 +1,11 @@
-#ifndef ODOM_UTILS_H
-#define ODOM_UTILS_H
+#ifndef utils_H
+#define utils_H
 
 #include <vector>
 #include <stdio.h>
 #include <math.h>
 
-namespace odom_utils {
+namespace utils {
 
 /*!
  \param x
@@ -94,7 +94,7 @@ static void make_trajectory(const float & vel_lin, const float & vel_ang,
   out_traj.clear();
   out_traj.reserve(time_end / dt);
   for (float t = 0; t < time_end; t+= dt) {
-    odom_utils::update_pos_rot(x, y, yaw, vel_lin, 0, vel_ang, dt);
+    utils::update_pos_rot(x, y, yaw, vel_lin, 0, vel_ang, dt);
     _Pt2 pt;
     pt.x = x; pt.y = y;
     out_traj.push_back(pt);
@@ -103,6 +103,58 @@ static void make_trajectory(const float & vel_lin, const float & vel_ang,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-} // end namespace odom_utils
+template<typename T>
+static inline T clamp(T Value, T Min, T Max) {
+  return (Value < Min)? Min : (Value > Max)? Max : Value;
+}
 
-#endif // ODOM_UTILS_H
+////////////////////////////////////////////////////////////////////////////////
+
+/*!
+ \param A
+ \param B
+ \return the quantity AB * AB. It is faster to compute than their actual distance
+ and enough for, for instance, comparing two distances
+*/
+template<class Point2_A, class Point2_B>
+static inline double
+distance_points_squared(const Point2_A & A, const Point2_B & B) {
+  return (A.x - B.x) * (A.x - B.x) +  (A.y - B.y) * (A.y - B.y);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+/*!
+ \param A
+    a vector of 2D points
+ \param B
+    a vector of 2D points
+ \param min_dist
+    a threshold distance
+ \return min_dist
+    -1 if vectors closer than min_dist, min distance otherwise
+*/
+template<class _Pt2>
+inline double vectors_dist_thres(const std::vector<_Pt2> & A,
+                                 const std::vector<_Pt2> & B,
+                                 const float dist_thres) {
+  float dist_thres_sq = dist_thres * dist_thres;
+  double min_dist_sq = 1E10;
+  for (unsigned int A_idx = 0; A_idx < A.size(); ++A_idx) {
+    for (unsigned int B_idx = 0; B_idx < B.size(); ++B_idx) {
+      double dist = utils::distance_points_squared(A[A_idx], B[B_idx]);
+      if (dist < dist_thres_sq)
+        return -1;
+      if (dist < min_dist_sq)
+        min_dist_sq = dist;
+    } // end loop B_idx
+  } // end loop A_idx
+  return sqrt(min_dist_sq);
+} // end vectors_dist_thres()
+
+////////////////////////////////////////////////////////////////////////////////
+
+} // end namespace utils
+
+
+#endif // utils_H

@@ -127,9 +127,9 @@ public:
 
     // determine the coming trajectory
     std::vector<Pt2> traj_xy;
-    odom_utils::make_trajectory(v, w, traj_xy, _time_pred, _time_step, 0, 0, 0);
+    utils::make_trajectory(v, w, traj_xy, _time_pred, _time_step, 0, 0, 0);
     // find if there might be a collision
-    double dist = geometry_utils::vectors_dist_thres(traj_xy, laser_xy, _min_obstacle_distance);
+    double dist = utils::vectors_dist_thres(traj_xy, laser_xy, _min_obstacle_distance);
     if (dist < 0)
       return -1;
     //return dist + fabs(v); // bonus for speed

@@ -1,17 +1,17 @@
 <launch>
 <arg name="rviz" default="false"/>
 
-<node pkg="morseslam" type="morse_run.bash" name="morse_run" output="screen" required="true"
-      args="$(find morseslam)/config/lab.py" />
+<node pkg="laser_random_walk" type="morse_run.bash" name="morse_run" output="screen" required="true"
+      args="$(find laser_random_walk)/config/lab.py" />
 
 <node pkg="tf" type="static_transform_publisher" name="laser2base_broadcaster" output="screen"
       args="0 0 0  0 0 0  /base_footprint /base_laser_link 100" />
 
 <remap from="/odom" to="/robot/odometry" />
-<node pkg="morseslam" type="odom2tf.exe" name="odom2tf" output="screen"/>
+<node pkg="laser_random_walk" type="odom2tf.exe" name="odom2tf" output="screen"/>
 
 <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz"
-      args="--display-config $(find morseslam)/config/rviz_config.rviz"/>
+      args="--display-config $(find laser_random_walk)/config/rviz_config.rviz"/>
 
 <!--
 <node pkg="people_detection_vision" type="robot_wanderer_with_moving_goal.exe"

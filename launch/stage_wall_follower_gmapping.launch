@@ -7,13 +7,13 @@
 
 <!-- find /opt/ros/*/share/stage* -name "*.world" -->
 <node pkg="stage_ros" type="stageros" name="stage" output="screen" required="true"
-  args="$(find morseslam)/config/$(arg world).world" />
+  args="$(find laser_random_walk)/config/$(arg world).world" />
 
 <node pkg="tf" type="static_transform_publisher" name="laser2base_broadcaster" output="screen"
       args="0 0 0  0 0 0  /robot_0/base_link /robot_0/base_laser_link 100" />
 
 <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz"
-      args="--display-config $(find morseslam)/config/stage_rviz_config.rviz"/>
+      args="--display-config $(find laser_random_walk)/config/stage_rviz_config.rviz"/>
 
 <node pkg="laser_random_walk" type="wall_follower.exe" output="screen"
       name="wall_follower"

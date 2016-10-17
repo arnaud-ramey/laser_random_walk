@@ -8,64 +8,6 @@
 #define DEBUG_PRINT(...)   {}
 //#define DEBUG_PRINT(...)   printf(__VA_ARGS__)
 
-////////////////////////////////////////////////////////////////////////////////
-
-template<typename T>
-static inline T clamp(T Value, T Min, T Max) {
-  return (Value < Min)? Min : (Value > Max)? Max : Value;
-}
-
-namespace geometry_utils {
-
-////////////////////////////////////////////////////////////////////////////////
-
-/*!
- \param A
- \param B
- \return the quantity AB * AB. It is faster to compute than their actual distance
- and enough for, for instance, comparing two distances
-*/
-template<class Point2_A, class Point2_B>
-static inline double
-distance_points_squared(const Point2_A & A, const Point2_B & B) {
-  return (A.x - B.x) * (A.x - B.x) +  (A.y - B.y) * (A.y - B.y);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-/*!
- \param A
-    a vector of 2D points
- \param B
-    a vector of 2D points
- \param min_dist
-    a threshold distance
- \return min_dist
-    -1 if vectors closer than min_dist, min distance otherwise
-*/
-template<class _Pt2>
-inline double vectors_dist_thres(const std::vector<_Pt2> & A,
-                                 const std::vector<_Pt2> & B,
-                                 const float dist_thres) {
-  float dist_thres_sq = dist_thres * dist_thres;
-  double min_dist_sq = 1E10;
-  for (unsigned int A_idx = 0; A_idx < A.size(); ++A_idx) {
-    for (unsigned int B_idx = 0; B_idx < B.size(); ++B_idx) {
-      double dist = geometry_utils::distance_points_squared(A[A_idx], B[B_idx]);
-      if (dist < dist_thres_sq)
-        return -1;
-      if (dist < min_dist_sq)
-        min_dist_sq = dist;
-    } // end loop B_idx
-  } // end loop A_idx
-  return sqrt(min_dist_sq);
-} // end vectors_dist_thres()
-
-////////////////////////////////////////////////////////////////////////////////
-
-} // end namespace geometry_utils
-
-
 /*!
 * \struct SpeedOrder
 * A minimalistic structure for representing an order sent to a mobile base,
@@ -105,7 +47,7 @@ public:
   inline void set_costmap(const std::vector<Pt2> & costmap_cell_centers,
                           const double min_obstacle_distance) {
     _costmap_cell_centers = costmap_cell_centers;
-    _min_obstacle_distance = clamp(fabs(min_obstacle_distance), .01, 10.);
+    _min_obstacle_distance = utils::clamp(fabs(min_obstacle_distance), .01, 10.);
   }
 
   //////////////////////////////////////////////////////////////////////////////
@@ -130,13 +72,13 @@ public:
 
   inline std::vector<Pt2> get_best_trajectory() const {
     std::vector<Pt2> out_traj;
-    odom_utils::make_trajectory(// get_best_element().element.v,
-                                _curr_order.v,
-                                // get_best_element().element.w,
-                                _curr_order.w,
-                                out_traj,
-                                _time_pred, _time_step,
-                                0, 0, 0);
+    utils::make_trajectory(// get_best_element().element.v,
+                           _curr_order.v,
+                           // get_best_element().element.w,
+                           _curr_order.w,
+                           out_traj,
+                           _time_pred, _time_step,
+                           0, 0, 0);
     //start_pos.x, start_pos.y, start_yaw);
     return out_traj;
   }
