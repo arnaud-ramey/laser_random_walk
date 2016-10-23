@@ -1,5 +1,7 @@
 # laser_random_walk
 
+[![Build Status](https://travis-ci.org/arnaud-ramey/laser_random_walk.svg)](https://travis-ci.org/arnaud-ramey/laser_random_walk)
+
 Installation
 ============
 
