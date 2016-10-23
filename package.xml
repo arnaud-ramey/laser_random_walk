@@ -4,15 +4,18 @@
   <name>laser_random_walk</name>
   <version>0.0.0</version>
   <description>
-    mip_calibrate : Auto-calibration for MIP robot
+    laser_random_walk
   </description>
   <maintainer email="arnaud.a.ramey@gmail.com">Arnaud Ramey</maintainer>
   <license>LGPLv3</license>
   <!-- dependencies -->
   <buildtool_depend>catkin</buildtool_depend>
   <depend>gmapping</depend>
-  <depend>roscpp</depend>
+  <depend>key_teleop</depend>
+  <depend>joy_teleop</depend>
+  <depend>mouse_teleop</depend>
   <depend>nav_msgs</depend>
+  <depend>roscpp</depend>
   <depend>tf</depend>
 
   <export>
