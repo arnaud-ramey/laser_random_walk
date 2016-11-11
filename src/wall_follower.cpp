@@ -46,6 +46,7 @@
     The robot radius, in meters.
 */
 #include <laser_random_walk/wanderer.h>
+#include <laser_random_walk/timer.h>
 // ROS
 #include <ros/ros.h>
 #include <tf/transform_datatypes.h>
@@ -92,7 +93,7 @@ public:
   ////////////////////////////////////////////////////////////////////////////////
 
   void scan_cb(const sensor_msgs::LaserScanConstPtr & scan) {
-    vision_utils::Timer timer;
+    Timer timer;
     convert_sensor_data_to_xy(*scan, _scan2vec);
     // find right wall
     unsigned int npts = scan->ranges.size(), npts_prev = -1;
