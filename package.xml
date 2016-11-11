@@ -4,7 +4,7 @@
   <name>laser_random_walk</name>
   <version>0.0.0</version>
   <description>
-    mip_calibrate : Auto-calibration for MIP robot
+    laser_random_walk
   </description>
   <maintainer email="arnaud.a.ramey@gmail.com">Arnaud Ramey</maintainer>
   <license>LGPLv3</license>
