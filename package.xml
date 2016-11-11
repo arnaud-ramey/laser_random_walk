@@ -11,8 +11,11 @@
   <!-- dependencies -->
   <buildtool_depend>catkin</buildtool_depend>
   <depend>gmapping</depend>
-  <depend>roscpp</depend>
+  <depend>joy_teleop</depend>
+  <depend>key_teleop</depend>
+  <depend>mouse_teleop</depend>
   <depend>nav_msgs</depend>
+  <depend>roscpp</depend>
   <depend>tf</depend>
 
   <export>

@@ -1,5 +1,6 @@
 <launch>
 <arg name="rviz" default="false"/>
+<arg name="mouse_teleop" default="true"/>
 
 <!-- do not use Linux wall time but a simulated time -->
 <param name="/use_sim_time" value="true"/>
@@ -22,6 +23,9 @@
   <remap from="/scan" to="/robot_0/base_scan" />
 </node>
 
+<node if="$(arg mouse_teleop)" pkg="mouse_teleop" type="mouse_teleop.py" name="mouse_teleop">
+  <remap from="/mouse_vel" to="/robot_0/cmd_vel" />
+</node>
 <!--
 http://www.openrobots.org/morse/doc/1.2/user/advanced_tutorials/ros_nav_tutorial.html
 http://wiki.ros.org/gmapping#Required_tf_Transforms

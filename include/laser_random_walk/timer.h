@@ -14,54 +14,6 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <stdio.h>
-
-/*!
- * simple functions
- */
-long int getSeconds();
-long int getMiliSeconds();
-
-
-
-/* Just gets current system time in milliseconds */
-inline double getSystemTimeMSec(){
-
-  struct timeval cur_time;
-  double cur_time_msec, cur_time_msec_usec;
-
-  /* get current time */
-  gettimeofday(&cur_time, NULL);
-  cur_time_msec = (double)cur_time.tv_sec;
-  cur_time_msec_usec = (double)cur_time.tv_usec;
-  cur_time_msec = (cur_time_msec*1000.0 + cur_time_msec_usec/1000.0) + 0.5;
-  return cur_time_msec;
-}
-
-
-
-
-#ifdef __cplusplus // Fer C++ function
-#include <string>
-std::string getDateTime();
-#endif
-
-
-/*!
- * victor functions
- */
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* Calculate time diferences */
-long int timeDifferenceUsec (struct timeval * before, struct timeval * after);
-long int timeDifferenceMsec (struct timeval * before, struct timeval * after);
-
-#ifdef __cplusplus
-}
-#endif
-
-#ifdef __cplusplus
 /*!
  * a timer class - it uses 'float' as a time type
  */
@@ -119,8 +71,6 @@ public:
 private:
   struct timeval start;
 };
-
-#endif // C++
 
 #endif /*TIMER_H_*/
 
