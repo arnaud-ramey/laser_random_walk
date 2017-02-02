@@ -97,3 +97,9 @@ List of robots
 
 https://www.openrobots.org/morse/doc/stable/components_library.html
 https://www.openrobots.org/morse/doc/stable/user/integration.html
+
+
+Licence
+=======
+
+LGPL v3 (GNU Lesser General Public License version 3).
